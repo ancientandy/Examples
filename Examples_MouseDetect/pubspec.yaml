@@ -1,4 +1,4 @@
-name: mouse_detect
+name: input_tracking
 description: Test Flutter Project to show a polygon
 
 # The following line prevents the package from being accidentally published to

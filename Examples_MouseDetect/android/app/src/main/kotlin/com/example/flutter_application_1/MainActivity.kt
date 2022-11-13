@@ -1,4 +1,4 @@
-package com.example.mouse_detect
+package com.example.input_tracking
 
 import io.flutter.embedding.android.FlutterActivity
 
