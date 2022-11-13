@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:developer' as debug;
 
-import 'constants.dart' as Constants;
+import 'constants.dart' as constants;
 
 void main() {
   runApp(const MyApp());
@@ -35,20 +35,20 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   double _x = 0.0;
   double _y = 0.0;
-  String _focusText = Constants.outside;
-  String _pressedText = Constants.notPressed;
+  String _focusText = constants.outside;
+  String _pressedText = constants.notPressed;
   GlobalKey key = GlobalKey();
 
   void _inputEnter(PointerEvent details) {
     setState(() {
-      _focusText = Constants.inside;
+      _focusText = constants.inside;
       debug.log(_focusText);
     });
   }
 
   void _inputExit(PointerEvent details) {
     setState(() {
-      _focusText = Constants.outside;
+      _focusText = constants.outside;
       debug.log(_focusText);
     });
   }
@@ -69,7 +69,7 @@ class _MyHomePageState extends State<MyHomePage> {
   void _inputPressed(PointerEvent details) {
     setState(() {
       _inputPositionChange(details);
-      _pressedText = Constants.pressed;
+      _pressedText = constants.pressed;
       debug.log(_pressedText);
     });
   }
@@ -77,7 +77,7 @@ class _MyHomePageState extends State<MyHomePage> {
   void _inputReleased(PointerEvent details) {
     setState(() {
       _inputPositionChange(details);
-      _pressedText = Constants.notPressed;
+      _pressedText = constants.notPressed;
       debug.log(_pressedText);
     });
   }
