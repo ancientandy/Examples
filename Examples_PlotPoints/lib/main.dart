@@ -9,6 +9,9 @@ void main() {
   runApp(const MyApp());
 }
 
+// *****************************************************************************
+// Block of code that handles the flutter display and input tracking
+// *****************************************************************************
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -90,26 +93,6 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void _storePosition(double x, double y) {
     points.add(_x, _y, 0.0);
-//    _saveAsync();
-  }
-
-  void _saveAsync() async {
-    // Add a point to the list
-    points.add(_x, _y, 0.0);
-
-    // Convert to json
-    // String json = jsonEncode(points);
-
-    // // Convert from json
-    // Map<String, dynamic> map = jsonDecode(json);
-
-    // // Save points to a file
-    // // NOTE: this isn't needed for this demo and will not run on web clients
-    // final directory = await getApplicationDocumentsDirectory();
-    // final File file = File('${directory.path}/jsonObjects.json');
-    // debug.log(file.path);
-
-    // file.writeAsString(json);
   }
 
   @override
@@ -198,6 +181,12 @@ class _MyHomePageState extends State<MyHomePage> {
         ));
   }
 
+// *****************************************************************************
+// Block of code that handles the polygon triangulation (ear triangulation)
+// See here for an overview; https://www.youtube.com/watch?v=QAdfkylpYwc
+// Tutorial above didn't seem to work in all cases so adjusted the math as seen
+// in the code below
+// *****************************************************************************
   // Reset the flutter display so we can have another go
   void reset() {
     points.pointList.clear();
@@ -208,6 +197,7 @@ class _MyHomePageState extends State<MyHomePage> {
   void triangulate() {
     debug.log("Starting Triangulation");
 
+    // Build a list of indices. One for every vert
     List<int> indexList = [];
     indexList.clear();
     for (int i = 0; i < points.pointList.length; i++) {
@@ -220,7 +210,7 @@ class _MyHomePageState extends State<MyHomePage> {
       total += (points.pointList[i + 1].x - points.pointList[i].x) *
           (points.pointList[i + 1].y + points.pointList[i].y);
     }
-    if (total > 0) {
+    if (total <= 0) {
       points.pointList = points.pointList.reversed.toList();
     }
 
@@ -230,23 +220,23 @@ class _MyHomePageState extends State<MyHomePage> {
     while (indexList.length > 3 && loops < 2000) {
       loops++;
       for (int i = 0; i < indexList.length; i++) {
-        int a = getItem(indexList, i);
-        int b = getItem(indexList, i - 1);
-        int c = getItem(indexList, i + 1);
+        int indexA = getItem(indexList, i);
+        int indexB = getItem(indexList, i - 1);
+        int indexC = getItem(indexList, i + 1);
 
-        math.Vector3 va = points.pointList[a];
-        math.Vector3 vb = points.pointList[b];
-        math.Vector3 vc = points.pointList[c];
+        math.Vector3 va = points.pointList[indexA];
+        math.Vector3 vb = points.pointList[indexB];
+        math.Vector3 vc = points.pointList[indexC];
 
         // If this poly is convex then don't use it (for now)
-        if (isConvex(vb, va, vc) == false) {
+        if (isConvex(vb, va, vc)) {
           continue;
         }
 
         // Check to see if there are any verts inside this poly. If so then skip it
         bool isEar = true;
         for (int j = 0; j < points.pointList.length; j++) {
-          if (j == a || j == b || j == c) {
+          if (j == indexA || j == indexB || j == indexC) {
             continue;
           }
 
@@ -258,20 +248,23 @@ class _MyHomePageState extends State<MyHomePage> {
 
         // If this is an ear then add it to the list for display
         if (isEar) {
-          triangles.add(b);
-          triangles.add(a);
-          triangles.add(c);
+          triangles.add(
+              indexB); // A and B are switched to give the current winding order
+          triangles.add(indexA);
+          triangles.add(indexC);
           indexList.removeAt(i);
           break;
         }
       }
     }
+    // Store the last remaining indices as these must form the final triangle
     triangles.add(indexList[0]);
     triangles.add(indexList[1]);
     triangles.add(indexList[2]);
   }
 
   // Use pieces of a cross product to see if the angle between two vecs is convex
+  // http://www.gamedev.net/topic/542870-determine-which-side-of-a-line-a-point-is/page__view__findpost__p__4500667
   bool isConvex(math.Vector3 a, math.Vector3 b, math.Vector3 c) {
     return ((a.x * (c.y - b.y)) + (b.x * (a.y - c.y)) + (c.x * (b.y - a.y))) <
         0;
@@ -323,6 +316,9 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 }
 
+// *****************************************************************************
+// Block of code to handle the render of the polygons to show the results
+// *****************************************************************************
 class PolygonDisplay extends CustomPainter {
   Points points;
   List<int> triangles;
