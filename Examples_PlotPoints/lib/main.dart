@@ -1,11 +1,9 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'dart:developer' as debug;
 import 'constants.dart' as constants;
-import 'package:path_provider/path_provider.dart';
-import 'dart:io';
 import 'points.dart';
+import 'package:vector_math/vector_math.dart' as math;
+import 'dart:math' as dartmath;
 
 void main() {
   runApp(const MyApp());
@@ -43,6 +41,7 @@ class _MyHomePageState extends State<MyHomePage> {
   String _pressedText = constants.notPressed;
   GlobalKey key = GlobalKey();
   Points points = Points();
+  List<int> triangles = [];
 
   void _inputEnter(PointerEvent details) {
     setState(() {
@@ -90,7 +89,8 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void _storePosition(double x, double y) {
-    _saveAsync();
+    points.add(_x, _y, 0.0);
+//    _saveAsync();
   }
 
   void _saveAsync() async {
@@ -98,21 +98,18 @@ class _MyHomePageState extends State<MyHomePage> {
     points.add(_x, _y, 0.0);
 
     // Convert to json
-    String json = jsonEncode(points);
+    // String json = jsonEncode(points);
 
-    // Convert from json
-    Map<String, dynamic> map = jsonDecode(json);
+    // // Convert from json
+    // Map<String, dynamic> map = jsonDecode(json);
 
-    final directory =
-        await getApplicationDocumentsDirectory(); // Can't use this with web... DB?
-    final File file = File('${directory.path}/jsonObjects.json');
-    debug.log(file.path);
+    // // Save points to a file
+    // // NOTE: this isn't needed for this demo and will not run on web clients
+    // final directory = await getApplicationDocumentsDirectory();
+    // final File file = File('${directory.path}/jsonObjects.json');
+    // debug.log(file.path);
 
-    // if (await file.exists()) {
-    //   json = await file.readAsString();
-    // } else {
-    file.writeAsString(json);
-    // }
+    // file.writeAsString(json);
   }
 
   @override
@@ -161,7 +158,9 @@ class _MyHomePageState extends State<MyHomePage> {
                                   _x - 16, _y - 16, 0.0),
                               child: const CircleAvatar(
                                 radius: 16,
-                              ))
+                              )),
+                          CustomPaint(
+                              painter: PolygonDisplay(points, triangles)),
                         ]),
                       ),
                     ),
@@ -173,7 +172,7 @@ class _MyHomePageState extends State<MyHomePage> {
             /// Update the area at the bottom of the screen where we show the
             /// stats and feedback on what's going on
             Expanded(
-              flex: 1,
+              flex: 2,
               child: Container(
                   width: width,
                   margin: margin, //variable
@@ -182,8 +181,206 @@ class _MyHomePageState extends State<MyHomePage> {
                       "X: ${_x.toStringAsFixed(4)}, Y: ${_y.toStringAsFixed(4)}\nFocus: $_focusText\nButton/Tap: $_pressedText",
                       style: const TextStyle(
                           color: Color.fromARGB(255, 255, 255, 255)))),
-            )
+            ),
+            ElevatedButton(
+              child: const Text('Triangulate'),
+              onPressed: () {
+                triangulate();
+              },
+            ),
+            ElevatedButton(
+              child: const Text('Reset'),
+              onPressed: () {
+                reset();
+              },
+            ),
           ]),
         ));
   }
+
+  // Reset the flutter display so we can have another go
+  void reset() {
+    points.pointList.clear();
+    triangles.clear();
+  }
+
+  // Triangulate the poly using an ear algorithm
+  void triangulate() {
+    debug.log("Starting Triangulation");
+
+    List<int> indexList = [];
+    indexList.clear();
+    for (int i = 0; i < points.pointList.length; i++) {
+      indexList.add(i);
+    }
+
+    // Check the orientation of the points (needs to be ccw) to make this work
+    double total = 0;
+    for (int i = 0; i < points.pointList.length - 1; i++) {
+      total += (points.pointList[i + 1].x - points.pointList[i].x) *
+          (points.pointList[i + 1].y + points.pointList[i].y);
+    }
+    if (total > 0) {
+      points.pointList = points.pointList.reversed.toList();
+    }
+
+    int loops =
+        0; // This is just a safeguard to avoid locking in a while due to bad values in the verts
+    triangles.clear();
+    while (indexList.length > 3 && loops < 2000) {
+      loops++;
+      for (int i = 0; i < indexList.length; i++) {
+        int a = getItem(indexList, i);
+        int b = getItem(indexList, i - 1);
+        int c = getItem(indexList, i + 1);
+
+        math.Vector3 va = points.pointList[a];
+        math.Vector3 vb = points.pointList[b];
+        math.Vector3 vc = points.pointList[c];
+
+        // If this poly is convex then don't use it (for now)
+        if (isConvex(vb, va, vc) == false) {
+          continue;
+        }
+
+        // Check to see if there are any verts inside this poly. If so then skip it
+        bool isEar = true;
+        for (int j = 0; j < points.pointList.length; j++) {
+          if (j == a || j == b || j == c) {
+            continue;
+          }
+
+          if (inTriangle(points.pointList[j], va, vc, vb)) {
+            isEar = false;
+            break;
+          }
+        }
+
+        // If this is an ear then add it to the list for display
+        if (isEar) {
+          triangles.add(b);
+          triangles.add(a);
+          triangles.add(c);
+          indexList.removeAt(i);
+          break;
+        }
+      }
+    }
+    triangles.add(indexList[0]);
+    triangles.add(indexList[1]);
+    triangles.add(indexList[2]);
+  }
+
+  // Use pieces of a cross product to see if the angle between two vecs is convex
+  bool isConvex(math.Vector3 a, math.Vector3 b, math.Vector3 c) {
+    return ((a.x * (c.y - b.y)) + (b.x * (a.y - c.y)) + (c.x * (b.y - a.y))) <
+        0;
+  }
+
+  // Check to see if a point is within a triangle
+  bool inTriangle(math.Vector3 pointToCheck, math.Vector3 currentVert,
+      math.Vector3 nextVert, math.Vector3 previousVert) {
+    // Make sure we have no dupes in the mix
+    if (pointToCheck == currentVert ||
+        pointToCheck == nextVert ||
+        pointToCheck == previousVert) {
+      return false;
+    }
+
+    // Vector from current vert to previous
+    math.Vector3 v0 = math.Vector3((previousVert.x - currentVert.x),
+        (previousVert.y - currentVert.y), 0.0);
+
+    // Vector from current vert to next
+    math.Vector3 v1 = math.Vector3(
+        (nextVert.x - currentVert.x), (nextVert.y - currentVert.y), 0.0);
+
+    // Vector from current vert to point to check
+    math.Vector3 v2 = math.Vector3((pointToCheck.x - currentVert.x),
+        (pointToCheck.y - currentVert.y), 0.0);
+
+    // Crazy math (found here; http://www.blackpawn.com/texts/pointinpoly/default.html)
+    double u = (v1.dot(v1) * v2.dot(v0) - v1.dot(v0) * v2.dot(v1)) /
+        (v0.dot(v0) * v1.dot(v1) - v0.dot(v1) * v1.dot(v0));
+    double v = (v0.dot(v0) * v2.dot(v1) - v0.dot(v1) * v2.dot(v0)) /
+        (v0.dot(v0) * v1.dot(v1) - v0.dot(v1) * v1.dot(v0));
+
+    // u OR v < 0 = wrong direction from triangle and thus outside
+    // u OR v > 1 = went past triangle and thus outside
+    // u  + v > 1  = crossed diagonal of Vi+1 and Vi-1 and thus outside
+
+    return !(u < 0 || v < 0 || u > 1 || v > 1 || (u + v) > 1);
+  }
+
+  int getItem(List<int> indexList, int index) {
+    if (index < 0) {
+      return indexList[index + indexList.length];
+    }
+    if (index >= indexList.length) {
+      return indexList[index - indexList.length];
+    }
+    return indexList[index];
+  }
+}
+
+class PolygonDisplay extends CustomPainter {
+  Points points;
+  List<int> triangles;
+
+  PolygonDisplay(this.points, this.triangles);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final pointPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0
+      ..color = Colors.red;
+
+    if (points.pointList.isEmpty == false) {
+      final pointPath = Path();
+      if (points.pointList.length > 1) {
+        double lastX = points.pointList[0].x;
+        double lastY = points.pointList[0].y;
+
+        pointPath.moveTo(lastX, lastY);
+        for (int i = 1; i < points.pointList.length; i++) {
+          pointPath.relativeLineTo(
+              points.pointList[i].x - lastX, points.pointList[i].y - lastY);
+          lastX = points.pointList[i].x;
+          lastY = points.pointList[i].y;
+        }
+        pointPath.close();
+        canvas.drawPath(pointPath, pointPaint);
+      }
+
+      final pointPaint2 = Paint()
+        ..style = PaintingStyle.fill
+        ..strokeWidth = 3.0
+        ..color = Colors.red;
+
+      for (int i = 0; i < triangles.length; i += 3) {
+        var pointPath2 = Path();
+
+        List<math.Vector3> verts = points.pointList;
+
+        math.Vector3 a = verts[triangles[i]];
+        math.Vector3 b = verts[triangles[i + 1]];
+        math.Vector3 c = verts[triangles[i + 2]];
+
+        pointPath2.moveTo(a.x, a.y);
+        pointPath2.relativeLineTo(b.x - a.x, b.y - a.y);
+        pointPath2.relativeLineTo(c.x - b.x, c.y - b.y);
+        pointPath2.close();
+
+        pointPaint2.color =
+            Color((dartmath.Random().nextDouble() * 0xFFFFFF).toInt())
+                .withOpacity(1.0);
+
+        canvas.drawPath(pointPath2, pointPaint2);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(PolygonDisplay oldDelegate) => false;
 }

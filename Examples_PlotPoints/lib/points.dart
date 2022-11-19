@@ -1,33 +1,35 @@
 import 'dart:convert';
+import 'package:vector_math/vector_math.dart';
 
 class Points {
-  List<Point> pointList = [];
+  List<Vector3> pointList = [];
 
   Points();
 
   void add(double x, double y, double z) {
     // If the list is null then initialise it with a filled list. If not then
     // add another point to the list
-    pointList.add(Point(x, y, z));
+    pointList.add(Vector3(x, y, z));
   }
 
   // Handle json encode and decode
   Points.fromJson(Map<String, dynamic> json)
-      : pointList = List<Point>.from(json['pointList']);
+      : pointList = List<Vector3>.from(json['pointList']);
   Map<String, dynamic> toJson() => {'pointList': pointList};
 }
 
-class Point {
-  final double _x;
-  final double _y;
-  final double _z;
-  Point(this._x, this._y, this._z);
+// class Vector3 {
+//   double x;
+//   double y;
+//   double z;
 
-  // Handle json decode and encode
-  Point.fromJson(Map<String, dynamic> json)
-      : _x = json['_x'],
-        _y = json['_y'],
-        _z = json['_z'];
+//   Vector3(this.x, this.y, this.z);
 
-  Map<String, dynamic> toJson() => {'_x': _x, '_y': _y, '_z': _z};
-}
+//   // Handle json decode and encode
+//   Vector3.fromJson(Map<String, dynamic> json)
+//       : x = json['x'],
+//         y = json['y'],
+//         z = json['z'];
+
+//   Map<String, dynamic> toJson() => {'x': x, 'y': y, 'z': z};
+// }
